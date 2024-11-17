@@ -1,0 +1,93 @@
+import 'dart:async';
+
+// Enum untuk Role
+enum Role { Admin, Customer }
+
+// Kelas Product
+class Product {
+  String productName;
+  double price;
+  bool inStock;
+
+  Product({required this.productName, required this.price, required this.inStock});
+}
+
+// Kelas User
+class User {  
+  String name;
+  int age;
+  late List<Product> products; 
+  Role? role; 
+
+  User({required this.name, required this.age}) {
+    products = []; 
+  }
+}
+
+// Kelas AdminUser  yang merupakan subclass dari User
+class AdminUser  extends User {
+  AdminUser ({required String name, required int age}) : super(name: name, age: age) {
+    role = Role.Admin; 
+  }
+
+  // Fungsi untuk menambah produk
+  void addProduct(Product product) {
+    if (product.inStock) {
+      products.add(product);
+      print('Produk ${product.productName} berhasil ditambahkan.');
+    } else {
+      throw Exception('Produk ${product.productName} tidak tersedia dalam stok.');
+    }
+  }
+
+  // Fungsi untuk menghapus produk
+  void removeProduct(String productName) {
+    products.removeWhere((product) => product.productName == productName);
+    print('Produk $productName berhasil dihapus.');
+  }
+}
+
+// Kelas CustomerUser  yang merupakan subclass dari User
+class CustomerUser  extends User {
+  CustomerUser ({required String name, required int age}) : super(name: name, age: age) {
+    role = Role.Customer; 
+  }
+
+  // Fungsi untuk melihat daftar produk
+  void viewProducts() {
+    print('Daftar Produk:');
+    for (var product in products) {
+      print('- ${product.productName} (Harga: ${product.price}, Tersedia: ${product.inStock})');
+    }
+  }
+}
+
+// Fungsi asinkron untuk mengambil detail produk
+Future<Product> fetchProductDetails(String productName) async {
+
+  await Future.delayed(Duration(seconds: 2));
+  return Product(productName: productName, price: 100.0, inStock: true);
+}
+
+void main() async {
+  // Membuat objek AdminUser 
+  AdminUser  admin = AdminUser (name: 'Admin', age: 30);
+
+  // Menambahkan produk
+  try {
+    Product product1 = Product(productName: 'Laptop', price: 1500.0, inStock: true);
+    Product product2 = Product(productName: 'Smartphone', price: 800.0, inStock: false);
+    await fetchProductDetails(product1.productName); 
+    admin.addProduct(product1);
+    admin.addProduct(product2); 
+  } catch (e) {
+    print('Error: $e');
+  }
+
+  // Membuat objek CustomerUser 
+  CustomerUser  customer = CustomerUser (name: 'Customer', age: 25);
+  customer.products = admin.products; 
+
+  // Melihat daftar produk
+  customer.viewProducts();
+} 
