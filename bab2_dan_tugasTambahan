@@ -1,0 +1,365 @@
+// 1. ENUMERATIONS
+enum KategoriProduk { DataManagement, NetworkAutomation }
+enum FaseProyek { Perencanaan, Pengembangan, Evaluasi }
+enum PeranKaryawan { Developer, NetworkEngineer, Manager }
+enum StatusKaryawan { Aktif, NonAktif }
+
+// 2. EXCEPTIONS
+class ValidationException implements Exception {
+  final String message;
+  ValidationException(this.message);
+  
+  @override
+  String toString() => 'ValidationException: $message';
+}
+
+// 3. MIXINS
+mixin Kinerja {
+  double _produktivitas = 0;
+  DateTime? _lastUpdate;
+
+  double get produktivitas => _produktivitas;
+
+  bool get bisaUpdateProduktivitas {
+    if (_lastUpdate == null) return true;
+    return DateTime.now().difference(_lastUpdate!).inDays >= 30;
+  }
+
+  void updateProduktivitas(double nilai) {
+    // Validasi periode update
+    if (!bisaUpdateProduktivitas) {
+      throw ValidationException('Produktivitas hanya dapat diupdate setiap 30 hari');
+    }
+
+    // Validasi nilai produktivitas
+    if (nilai < 0 || nilai > 100) {
+      throw ValidationException('Nilai produktivitas harus antara 0-100');
+    }
+
+    _produktivitas = nilai;
+    _lastUpdate = DateTime.now();
+  }
+}
+
+// 4. CLASSES
+class ProdukDigital {
+  final String nama;
+  double _harga;
+  final KategoriProduk kategori;
+  int _terjual = 0;
+
+  double get harga => _harga;
+  int get terjual => _terjual;
+
+  ProdukDigital({
+    required this.nama,
+    required double harga,
+    required this.kategori,
+  }) : _harga = harga {
+    validasiHarga();
+  }
+
+  void validasiHarga() {
+    switch (kategori) {
+      case KategoriProduk.NetworkAutomation:
+        if (_harga < 200000) {
+          throw ValidationException('Produk NetworkAutomation harus memiliki harga minimal 200.000');
+        }
+        break;
+      case KategoriProduk.DataManagement:
+        if (_harga >= 200000) {
+          throw ValidationException('Produk DataManagement harus memiliki harga di bawah 200.000');
+        }
+        break;
+    }
+  }
+
+  void catatPenjualan() {
+    _terjual++;
+    if (kategori == KategoriProduk.NetworkAutomation && _terjual > 50) {
+      terapkanDiskon();
+    }
+  }
+
+  void terapkanDiskon() {
+    final hargaSetelahDiskon = _harga * 0.85; // Diskon 15%
+    if (hargaSetelahDiskon >= 200000) {
+      _harga = hargaSetelahDiskon;
+    }
+  }
+
+  @override
+  String toString() => 'ProdukDigital(nama: $nama, harga: $_harga, kategori: $kategori, terjual: $_terjual)';
+}
+
+abstract class Karyawan with Kinerja {
+  final String nama;
+  final int umur;
+  final PeranKaryawan peran;
+  StatusKaryawan status;
+
+  Karyawan(
+    this.nama, {
+    required this.umur,
+    required this.peran,
+  }) : status = StatusKaryawan.Aktif {
+    validasiKaryawan();
+  }
+
+  void validasiKaryawan() {
+    final int minUmur = switch (peran) {
+      PeranKaryawan.Developer => 20,
+      PeranKaryawan.NetworkEngineer => 22,
+      PeranKaryawan.Manager => 30,
+    };
+
+    if (umur < minUmur) {
+      throw ValidationException(
+        '${peran.toString().split('.').last} minimal berusia $minUmur tahun'
+      );
+    }
+  }
+
+  @override
+  void updateProduktivitas(double nilai) {
+    if (peran == PeranKaryawan.Manager && nilai < 85) {
+      throw ValidationException('Manager harus memiliki produktivitas minimal 85');
+    }
+    super.updateProduktivitas(nilai);
+  }
+
+  void resign() {
+    status = StatusKaryawan.NonAktif;
+  }
+
+  void bekerja();
+
+  @override
+  String toString() => 'Karyawan(nama: $nama, umur: $umur, peran: $peran, status: $status)';
+}
+
+class KaryawanTetap extends Karyawan {
+  KaryawanTetap(
+    String nama, {
+    required int umur,
+    required PeranKaryawan peran,
+  }) : super(nama, umur: umur, peran: peran);
+
+  @override
+  void bekerja() {
+    if (status == StatusKaryawan.NonAktif) {
+      throw ValidationException('Karyawan tidak aktif tidak dapat bekerja');
+    }
+    print('$nama bekerja sesuai jam kantor (09:00-17:00)');
+  }
+}
+
+class KaryawanKontrak extends Karyawan {
+  final DateTime tanggalMulai;
+  final DateTime tanggalBerakhir;
+
+  KaryawanKontrak(
+    String nama, {
+    required int umur,
+    required PeranKaryawan peran,
+    required this.tanggalMulai,
+    required this.tanggalBerakhir,
+  }) : super(nama, umur: umur, peran: peran) {
+    if (tanggalBerakhir.isBefore(tanggalMulai)) {
+      throw ValidationException('Tanggal berakhir kontrak tidak boleh sebelum tanggal mulai');
+    }
+  }
+
+  bool get masihAktif => DateTime.now().isBefore(tanggalBerakhir);
+
+  @override
+  void bekerja() {
+    if (status == StatusKaryawan.NonAktif) {
+      throw ValidationException('Karyawan tidak aktif tidak dapat bekerja');
+    }
+    if (!masihAktif) {
+      throw ValidationException('Kontrak sudah berakhir');
+    }
+    print('$nama bekerja sesuai kebutuhan proyek');
+  }
+}
+
+class Proyek {
+  final String nama;
+  final List<Karyawan> _timProyek = [];
+  FaseProyek _fase;
+  final DateTime tanggalMulai;
+
+  Proyek({
+    required this.nama,
+    required this.tanggalMulai,
+  }) : _fase = FaseProyek.Perencanaan;
+
+  List<Karyawan> get timProyek => List.unmodifiable(_timProyek);
+  FaseProyek get fase => _fase;
+
+  void tambahAnggotaTim(Karyawan karyawan) {
+    if (karyawan.status == StatusKaryawan.NonAktif) {
+      throw ValidationException('Tidak dapat menambahkan karyawan non-aktif ke tim');
+    }
+    _timProyek.add(karyawan);
+  }
+
+  bool beralihFase() {
+    switch (_fase) {
+      case FaseProyek.Perencanaan:
+        if (_timProyek.length >= 5) {
+          _fase = FaseProyek.Pengembangan;
+          return true;
+        }
+        return false;
+
+      case FaseProyek.Pengembangan:
+        final durasiProyek = DateTime.now().difference(tanggalMulai).inDays;
+        if (durasiProyek > 45) {
+          _fase = FaseProyek.Evaluasi;
+          return true;
+        }
+        return false;
+
+      case FaseProyek.Evaluasi:
+        return false;
+    }
+  }
+
+  @override
+  String toString() => 'Proyek(nama: $nama, fase: $_fase, anggota tim: ${_timProyek.length})';
+}
+
+class Perusahaan {
+  static const int MAKSIMAL_KARYAWAN_AKTIF = 20;
+  
+  final String nama = 'TongIT';
+  final List<Karyawan> _karyawanAktif = [];
+  final List<Karyawan> _karyawanNonAktif = [];
+  final List<ProdukDigital> _produk = [];
+  final List<Proyek> _proyek = [];
+
+  // Getters
+  List<Karyawan> get karyawanAktif => List.unmodifiable(_karyawanAktif);
+  List<Karyawan> get karyawanNonAktif => List.unmodifiable(_karyawanNonAktif);
+  List<ProdukDigital> get produk => List.unmodifiable(_produk);
+  List<Proyek> get proyek => List.unmodifiable(_proyek);
+
+  void tambahKaryawan(Karyawan karyawan) {
+    if (_karyawanAktif.length >= MAKSIMAL_KARYAWAN_AKTIF) {
+      throw ValidationException(
+        'Jumlah karyawan aktif sudah mencapai batas maksimal ($MAKSIMAL_KARYAWAN_AKTIF)'
+      );
+    }
+    _karyawanAktif.add(karyawan);
+  }
+
+  void prosesResign(Karyawan karyawan) {
+    if (_karyawanAktif.remove(karyawan)) {
+      karyawan.resign();
+      _karyawanNonAktif.add(karyawan);
+    } else {
+      throw ValidationException('Karyawan tidak ditemukan dalam daftar karyawan aktif');
+    }
+  }
+
+  void tambahProduk(ProdukDigital produk) {
+    if (_produk.any((p) => p.nama == produk.nama)) {
+      throw ValidationException('Produk dengan nama ${produk.nama} sudah ada');
+    }
+    _produk.add(produk);
+  }
+
+  void tambahProyek(Proyek proyek) {
+    if (_proyek.any((p) => p.nama == proyek.nama)) {
+      throw ValidationException('Proyek dengan nama ${proyek.nama} sudah ada');
+    }
+    _proyek.add(proyek);
+  }
+}
+
+// Main function untuk testing
+void main() {
+  try {
+    final perusahaan = Perusahaan();
+
+    // Menambahkan produk
+    final produkData = ProdukDigital(
+      nama: 'Data Analyzer Pro',
+      harga: 199000,
+      kategori: KategoriProduk.DataManagement,
+    );
+    
+    final produkNetwork = ProdukDigital(
+      nama: 'Network Automation Suite',
+      harga: 500000,
+      kategori: KategoriProduk.NetworkAutomation,
+    );
+
+    perusahaan.tambahProduk(produkData);
+    perusahaan.tambahProduk(produkNetwork);
+
+    // Menambahkan karyawan
+    final manager = KaryawanTetap(
+      'Sarah',
+      umur: 35,
+      peran: PeranKaryawan.Manager,
+    );
+    
+    final developer = KaryawanTetap(
+      'John',
+      umur: 25,
+      peran: PeranKaryawan.Developer,
+    );
+
+    final networkEngineer = KaryawanKontrak(
+      'Mike',
+      umur: 28,
+      peran: PeranKaryawan.NetworkEngineer,
+      tanggalMulai: DateTime.now(),
+      tanggalBerakhir: DateTime.now().add(Duration(days: 180)),
+    );
+
+    perusahaan.tambahKaryawan(manager);
+    perusahaan.tambahKaryawan(developer);
+    perusahaan.tambahKaryawan(networkEngineer);
+
+    // Mencoba update produktivitas
+    manager.updateProduktivitas(90);
+    developer.updateProduktivitas(75);
+    networkEngineer.updateProduktivitas(80);
+
+    // Membuat proyek baru
+    final proyek = Proyek(
+      nama: 'Sistem Manajemen Data v2',
+      tanggalMulai: DateTime.now(),
+    );
+
+    // Menambahkan anggota tim ke proyek
+    proyek.tambahAnggotaTim(manager);
+    proyek.tambahAnggotaTim(developer);
+    proyek.tambahAnggotaTim(networkEngineer);
+
+    perusahaan.tambahProyek(proyek);
+
+    // Testing
+    print('\n=== Status Sistem ===');
+    print('Jumlah Karyawan Aktif: ${perusahaan.karyawanAktif.length}');
+    print('Fase Proyek: ${proyek.fase}');
+    
+    print('\n=== Aktivitas Karyawan ===');
+    manager.bekerja();
+    developer.bekerja();
+    networkEngineer.bekerja();
+
+    print('\n=== Testing Resign ===');
+    perusahaan.prosesResign(developer);
+    print('Status ${developer.nama}: ${developer.status}');
+    print('Jumlah Karyawan Aktif: ${perusahaan.karyawanAktif.length}');
+    print('Jumlah Karyawan Non-Aktif: ${perusahaan.karyawanNonAktif.length}');
+
+  } catch (e) {
+    print('\nError: $e'); 
+  }
+}
